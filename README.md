@@ -19,7 +19,7 @@ After that, you can start the development server using npx vite or `npm run dev`
 At the project's root, create a `.env` file to set the following environment variables for development:  
 
 ```json
-NODE_ENVIRONMENT=development
+NODE_ENV=development
 ```
 
 ## Goals
