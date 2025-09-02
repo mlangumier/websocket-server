@@ -46,8 +46,11 @@ const handleMessage = (ws: WebSocket, messageBuffer: Buffer) => {
   switch (message.type) {
     case "ADD_PLAYER":
       gameData = addPlayer(ws, message.content);
-      ws.send(JSON.stringify(gameData)); // Send message to player with their player info
 
+      // Send message to player with their player info
+      ws.send(JSON.stringify(gameData));
+
+      // Send game object message to everyone else without the player's info
       delete gameData.message;
       sendDataToClients(ws, gameData, "EXCEPT_SENDER");
       break;
@@ -90,12 +93,11 @@ const sendDataToClients = (
   gameData: IGame,
   sendTo: "EVERYONE" | "EXCEPT_SENDER"
 ) => {
-wss.clients.forEach(client => {
-  if (client.readyState !== WebSocket.OPEN) return;
+  wss.clients.forEach(client => {
+    if (client.readyState !== WebSocket.OPEN) return;
 
-  if (sendTo === "EXCEPT_SENDER" && client === ws) return; 
+    if (sendTo === "EXCEPT_SENDER" && client === ws) return;
 
-  client.send(JSON.stringify(gameData));
-});
-
+    client.send(JSON.stringify(gameData));
+  });
 };
