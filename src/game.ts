@@ -69,7 +69,7 @@ export const addPlayer = (client: WebSocket, playerName: string): IGame => {
     return { ...gameData, type: "GAME_START" };
   }
 
-  return { ...gameData, type: "UPDATE", message: `${newPlayer.name} joined` };
+  return { ...gameData, type: "UPDATE", message: newPlayer };
 };
 
 /**
