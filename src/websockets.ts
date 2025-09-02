@@ -1,11 +1,10 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { httpServer } from "./http-server.js";
-import { addPlayer, playerMove, removePlayer } from "./game.js";
-import { IMessage, IPlayer } from "./types.js";
+import { addPlayer, initializeGame, playerMove, removePlayer } from "./game.js";
+import { IRequest } from "./types.js";
 
 // Create WebSocket connection on the server
 export const wss = new WebSocketServer({ server: httpServer });
-const clients = new Set<WebSocket>();
 
 // Manages the events of the WebSocket
 wss.on("connection", (ws: WebSocket) => {
@@ -25,13 +24,13 @@ wss.on("connection", (ws: WebSocket) => {
 });
 
 /**
- * Handles the new client connection: a player arrives on the page
+ * Handles the new client connection: sends the current game info to the client
  * @param ws WebSocket client
  */
 const handleConnection = (ws: WebSocket) => {
-  console.log(`Client connected (currently ${wss.clients.size} players)`);
-  clients.add(ws);
-  addPlayer(ws, ""); // TODO: auto-creates users -> Remove after testing
+  console.log(`Client connected (Current clients: ${wss.clients.size})`);
+  const gameData = initializeGame();
+  ws.send(JSON.stringify(gameData));
 };
 
 /**
@@ -40,16 +39,14 @@ const handleConnection = (ws: WebSocket) => {
  * @param message Message sent by a client, to be notified to the others
  */
 const handleMessage = (ws: WebSocket, messageBuffer: Buffer) => {
-  const message: IMessage = JSON.parse(messageBuffer.toString());
-  let player: IPlayer;
+  const message: IRequest = JSON.parse(messageBuffer.toString());
+  console.log(message);
 
   switch (message.type) {
     case "ADD_PLAYER":
-      addPlayer(ws, message.content);
-      // sendDataToClients("NEW_PLAYER", player);
-      break;
+      return addPlayer(ws, message.content);
     case "MOVE":
-      playerMove(ws, Number(message.content));
+      return playerMove(ws, Number(message.content));
     default:
       console.error("Unknown action");
   }

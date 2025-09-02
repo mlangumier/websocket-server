@@ -1,5 +1,5 @@
 import { WebSocket } from "ws";
-import { IPlayer, ISymbol, IPlayerClient } from "./types.js";
+import { IPlayer, ISymbol, IPlayerClient, IResponse } from "./types.js";
 
 const lines = [
   [0, 1, 2],
@@ -14,24 +14,33 @@ const lines = [
 let board = new Array<ISymbol | null>(9).fill(null);
 let player1: IPlayerClient | null = null;
 let player2: IPlayerClient | null = null;
+let response: IResponse = {
+  type: "UPDATE",
+  board: board,
+  players: {
+    player1: null,
+    player2: null,
+  },
+};
 
-const createPlayer = (
-  ws: WebSocket,
-  name: string,
-  symbol: ISymbol
-): IPlayerClient => {
+export const initializeGame = (): IResponse => {
   return {
-    client: ws,
-    player: { name: name, symbol: symbol },
+    type: "GAME_START",
+    board: board,
+    players: {
+      player1: player1?.player ?? null,
+      player2: player2?.player ?? null,
+    },
   };
 };
+
 /**
  * When a user arrives on the website, adds them to the list of players if there aren't two players yet
  * @param client WebSocket client of the user
  * @param playerName Name of the user (input)
  * @returns the user's info
  */
-const addPlayer = (client: WebSocket, playerName: string): IPlayer => {
+export const addPlayer = (client: WebSocket, playerName: string): IPlayer => {
   if (player1 && player2) {
     client.send(
       JSON.stringify({
@@ -40,6 +49,7 @@ const addPlayer = (client: WebSocket, playerName: string): IPlayer => {
       })
     );
   }
+
   const playerInfo: IPlayerClient = createPlayer(
     client,
     playerName,
@@ -65,7 +75,7 @@ const addPlayer = (client: WebSocket, playerName: string): IPlayer => {
  * @param move Where the user clicked to play their turn
  * @returns (TBD)
  */
-const playerMove = (client: WebSocket, moveId: number) => {
+export const playerMove = (client: WebSocket, moveId: number) => {
   let playerInfo: IPlayerClient;
 
   if (client === player1?.client) playerInfo = player1;
@@ -117,7 +127,7 @@ const playerMove = (client: WebSocket, moveId: number) => {
  * Deletes the disconnected user from the list of players (if present).
  * @param client WebSocket client of the user
  */
-const removePlayer = (client: WebSocket) => {
+export const removePlayer = (client: WebSocket) => {
   if (player1 && player2) {
     if (player1.client === client) {
       player1 = null;
@@ -127,6 +137,24 @@ const removePlayer = (client: WebSocket) => {
       return "Player has left the game";
     }
   }
+};
+
+/**
+ * Creates a new PlayerClient object
+ * @param ws
+ * @param name
+ * @param symbol
+ * @returns
+ */
+const createPlayer = (
+  ws: WebSocket,
+  name: string,
+  symbol: ISymbol
+): IPlayerClient => {
+  return {
+    client: ws,
+    player: { name: name, symbol: symbol },
+  };
 };
 
 /**
@@ -154,4 +182,3 @@ const isBoardFull = () => {
 
 //TODO: message type "GAME_START" -> 2 players ready, game can start
 //TODO: message type "UPDATE" ->
-export { addPlayer, removePlayer, playerMove };
