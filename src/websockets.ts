@@ -90,11 +90,12 @@ const sendDataToClients = (
   gameData: IGame,
   sendTo: "EVERYONE" | "EXCEPT_SENDER"
 ) => {
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN)
-      if (sendTo === "EXCEPT_SENDER" && ws !== client) {
-        return;
-      }
-    client.send(JSON.stringify(gameData));
-  });
+wss.clients.forEach(client => {
+  if (client.readyState !== WebSocket.OPEN) return;
+
+  if (sendTo === "EXCEPT_SENDER" && client === ws) return; 
+
+  client.send(JSON.stringify(gameData));
+});
+
 };

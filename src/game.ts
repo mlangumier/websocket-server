@@ -28,8 +28,14 @@ let gameData: IGame = {
  * @returns The current state of the game
  */
 export const initializeGame = (): IGame => {
-  return { ...gameData, type: "UPDATE" };
+  const waiting =
+    !gameData.players.player1 || !gameData.players.player2
+      ? "Waiting for players…"
+      : undefined;
+
+  return { ...gameData, type: "UPDATE", message: waiting };
 };
+
 
 /**
  * When a user arrives on the website, adds them to the list of players if there aren't two players yet
@@ -48,11 +54,16 @@ export const addPlayer = (client: WebSocket, playerName: string): IGame => {
         message: "Can't create any new players.",
       })
     );
+    return {
+      ...gameData,
+      type: "ERROR",
+      message: "Can't create any new players.",
+    };
   }
 
   // Create player1 & player2 if they don't exist yet
   if (gameData.players.player1 === null) {
-    newPlayer = { name: playerName, symbol: "O" };
+    newPlayer = { name: playerName, symbol: "X" };
     gameData.players.player1 = newPlayer;
     client1 = client;
   } else {
@@ -62,17 +73,10 @@ export const addPlayer = (client: WebSocket, playerName: string): IGame => {
   }
 
   if (client1 && client2) {
-    return {
-      ...gameData,
-      type: "GAME_START",
-      currentTurn: gameData.players.player1.name,
-    };
+    gameData.currentTurn = gameData.players.player1!.name;
+    return { ...gameData, type: "GAME_START" };
   }
-  return {
-    ...gameData,
-    type: "PLAYER_INFO",
-    message: newPlayer,
-  };
+  return { ...gameData, type: "UPDATE", message: `${newPlayer.name} joined` };
 };
 
 /**
@@ -91,8 +95,8 @@ export const playerMove = (moveId: number): IGame => {
     gameData.currentTurn === player1.name ? player1 : player2;
 
   // Add move to the board with the player's symbol if box isn't already checked
-  if (board[moveId] !== null) {
-    board.splice(moveId, 0, currentPlayer.symbol);
+  if (board[moveId] === null) {
+    board[moveId] = currentPlayer.symbol;
   } else {
     throw new Error(`Square ${moveId} already taken`);
   }
@@ -123,7 +127,7 @@ export const playerMove = (moveId: number): IGame => {
     type: "UPDATE",
     currentTurn:
       currentPlayer.name === player1.name ? player2.name : player1.name,
-    message: { movie: moveId },
+    message: { move: moveId },
   };
 };
 
