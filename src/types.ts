@@ -1,6 +1,11 @@
-import { WebSocket } from "ws";
+type IMessageType =
+  | "GAME_START"
+  | "PLAYER_INFO"
+  | "UPDATE"
+  | "GAME_OVER"
+  | "ERROR"
+  | "PENDING";
 
-type IMessageType = "GAME_START" | "UPDATE" | "GAME_OVER" | "ERROR";
 type ISymbol = "X" | "O" | "NONE";
 
 interface IRequest {
@@ -13,12 +18,7 @@ interface IPlayer {
   symbol: ISymbol;
 }
 
-interface IPlayerClient {
-  client: WebSocket;
-  player: IPlayer;
-}
-
-interface IResponse {
+interface IGame {
   type: IMessageType;
   players: {
     player1: IPlayer | null;
@@ -27,7 +27,7 @@ interface IResponse {
   board: (ISymbol | null)[];
   winner?: string;
   currentTurn?: string;
-  message?: string;
+  message?: {};
 }
 
-export { IMessageType, ISymbol, IRequest, IPlayer, IPlayerClient, IResponse };
+export { IMessageType, ISymbol, IRequest, IPlayer, IGame };

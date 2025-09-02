@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { httpServer } from "./http-server.js";
 import { addPlayer, initializeGame, playerMove, removePlayer } from "./game.js";
-import { IRequest } from "./types.js";
+import { IGame, IRequest } from "./types.js";
 
 // Create WebSocket connection on the server
 export const wss = new WebSocketServer({ server: httpServer });
@@ -41,34 +41,35 @@ const handleConnection = (ws: WebSocket) => {
 const handleMessage = (ws: WebSocket, messageBuffer: Buffer) => {
   const message: IRequest = JSON.parse(messageBuffer.toString());
   console.log(message);
+  let gameData: IGame;
 
   switch (message.type) {
     case "ADD_PLAYER":
-      return addPlayer(ws, message.content);
+      gameData = addPlayer(ws, message.content);
+      ws.send(JSON.stringify(gameData)); // Send message to player with their player info
+
+      delete gameData.message;
+      sendDataToClients(ws, gameData, "EXCEPT_SENDER");
+      break;
     case "MOVE":
-      return playerMove(ws, Number(message.content));
+      gameData = playerMove(Number(message.content));
+      sendDataToClients(ws, gameData, "EVERYONE");
+      break;
     default:
-      console.error("Unknown action");
+      throw new Error("Unknown action type");
   }
-
-  // Send message to all connected clients except the one who sent the message
 };
-
-// const sendDataToClients(type: IDataType, data) {
-//     clients.forEach(client => {
-//     if (client !== ws && client.readyState === WebSocket.OPEN)
-//       // {type, players, board, winner?, currentTurn, message}
-//       client.send(JSON.stringify(data));
-//   });
-// }
 
 /**
  * Handles a client disconnecting from the WebSocket by removing them from the client list.
  * @param ws WebSocket client
  */
 const handleClose = (client: WebSocket) => {
-  removePlayer(client);
-  console.log(`Client disconnected (currently ${wss.clients.size} players)`);
+  const gameData: IGame | void = removePlayer(client);
+  if (gameData) {
+    sendDataToClients(client, gameData, "EVERYONE");
+  }
+  console.log(`Client disconnected (current clients: ${wss.clients.size})`);
 };
 
 /**
@@ -77,4 +78,23 @@ const handleClose = (client: WebSocket) => {
  */
 const handleError = (error: Error) => {
   console.error(`WebSocket error: ${error?.cause}, ${error.message}`);
+};
+
+/**
+ * Sends data to all clients except the one who sent the action
+ * @param ws Client who sent the message/action
+ * @param data
+ */
+const sendDataToClients = (
+  ws: WebSocket,
+  gameData: IGame,
+  sendTo: "EVERYONE" | "EXCEPT_SENDER"
+) => {
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN)
+      if (sendTo === "EXCEPT_SENDER" && ws !== client) {
+        return;
+      }
+    client.send(JSON.stringify(gameData));
+  });
 };

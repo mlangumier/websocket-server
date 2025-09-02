@@ -1,5 +1,5 @@
 import { WebSocket } from "ws";
-import { IPlayer, ISymbol, IPlayerClient, IResponse } from "./types.js";
+import { IPlayer, ISymbol, IGame } from "./types.js";
 
 const lines = [
   [0, 1, 2],
@@ -12,10 +12,10 @@ const lines = [
   [2, 4, 6],
 ];
 let board = new Array<ISymbol | null>(9).fill(null);
-let player1: IPlayerClient | null = null;
-let player2: IPlayerClient | null = null;
-let response: IResponse = {
-  type: "UPDATE",
+let client1: WebSocket | null = null;
+let client2: WebSocket | null = null;
+let gameData: IGame = {
+  type: "PENDING",
   board: board,
   players: {
     player1: null,
@@ -23,15 +23,12 @@ let response: IResponse = {
   },
 };
 
-export const initializeGame = (): IResponse => {
-  return {
-    type: "GAME_START",
-    board: board,
-    players: {
-      player1: player1?.player ?? null,
-      player2: player2?.player ?? null,
-    },
-  };
+/**
+ * Initializes the game with the current data when a client enters the page
+ * @returns The current state of the game
+ */
+export const initializeGame = (): IGame => {
+  return { ...gameData, type: "UPDATE" };
 };
 
 /**
@@ -40,86 +37,93 @@ export const initializeGame = (): IResponse => {
  * @param playerName Name of the user (input)
  * @returns the user's info
  */
-export const addPlayer = (client: WebSocket, playerName: string): IPlayer => {
-  if (player1 && player2) {
+export const addPlayer = (client: WebSocket, playerName: string): IGame => {
+  let newPlayer: IPlayer;
+
+  if (gameData.players.player1 && gameData.players.player2) {
     client.send(
       JSON.stringify({
+        ...gameData,
         type: "ERROR",
         message: "Can't create any new players.",
       })
     );
   }
 
-  const playerInfo: IPlayerClient = createPlayer(
-    client,
-    playerName,
-    player1 !== null ? "O" : "X"
-  );
-
   // Create player1 & player2 if they don't exist yet
-  if (player1 === null) {
-    player1 = playerInfo;
-  } else player2 ??= playerInfo;
+  if (gameData.players.player1 === null) {
+    newPlayer = { name: playerName, symbol: "O" };
+    gameData.players.player1 = newPlayer;
+    client1 = client;
+  } else {
+    newPlayer = { name: playerName, symbol: "X" };
+    gameData.players.player2 = newPlayer;
+    client2 = client;
+  }
 
-  // Send message to client with player's game info
-  client.send(
-    JSON.stringify({ type: "PLAYER_INFO", message: playerInfo.player })
-  );
-
-  return playerInfo.player;
+  if (client1 && client2) {
+    return {
+      ...gameData,
+      type: "GAME_START",
+      currentTurn: gameData.players.player1.name,
+    };
+  }
+  return {
+    ...gameData,
+    type: "PLAYER_INFO",
+    message: newPlayer,
+  };
 };
 
 /**
  * Get the user's move, records it and check if it creates a win.
  * @param client WebSocket client of the user
  * @param move Where the user clicked to play their turn
- * @returns (TBD)
+ * @returns the game's information
  */
-export const playerMove = (client: WebSocket, moveId: number) => {
-  let playerInfo: IPlayerClient;
+export const playerMove = (moveId: number): IGame => {
+  const { player1, player2 } = gameData.players;
 
-  if (client === player1?.client) playerInfo = player1;
-  else if (client === player2?.client) playerInfo = player2;
-  else throw new Error("Player not found");
-
-  if (!playerInfo) {
-    console.error("No player found");
-    throw new Error("Client doesn't match any existing player.");
+  if (!player1 || !player2) {
+    throw new Error("Playing missing. Can't register move.");
   }
+  const currentPlayer: IPlayer =
+    gameData.currentTurn === player1.name ? player1 : player2;
 
   // Add move to the board with the player's symbol if box isn't already checked
   if (board[moveId] !== null) {
-    board.splice(moveId, 0, playerInfo.player.symbol);
+    board.splice(moveId, 0, currentPlayer.symbol);
   } else {
-    console.log(`Wrong box`);
-    return;
+    throw new Error(`Square ${moveId} already taken`);
   }
 
   // Check winning combinaison or draw (array length)
-  const isWinner: boolean = calculateWinner();
+  if (calculateWinner()) {
+    console.log(`WINNER: ${currentPlayer.name}`);
 
-  if (isWinner) {
-    console.log(`WINNER: ${playerInfo.player.name}`);
     return {
-      players: { player1, player2 },
-      moveId,
-      board,
-      isWinner: playerInfo.player.name,
+      ...gameData,
+      type: "GAME_OVER",
+      winner: gameData.currentTurn,
+      message: { move: moveId },
     };
   }
 
   // Check if board full & declare draw
   if (isBoardFull()) {
-    console.log(`DRAW!`);
+    return {
+      ...gameData,
+      type: "GAME_OVER",
+      message: "Draw!",
+    };
   }
 
   return {
-    type: "",
-    board,
-    winner: isWinner ?? playerInfo.player.name,
+    ...gameData,
+    type: "UPDATE",
     currentTurn:
-      playerInfo === player1 ? player2?.player.name : player1?.player.name,
-    message: moveId,
+      currentPlayer.name === player1.name ? player2.name : player1.name,
+    message: { movie: moveId },
   };
 };
 
@@ -127,34 +131,22 @@ export const playerMove = (client: WebSocket, moveId: number) => {
  * Deletes the disconnected user from the list of players (if present).
  * @param client WebSocket client of the user
  */
-export const removePlayer = (client: WebSocket) => {
-  if (player1 && player2) {
-    if (player1.client === client) {
-      player1 = null;
-      return "Player has left the game";
-    } else if (player2.client === client) {
-      player2 = null;
-      return "Player has left the game";
-    }
+export const removePlayer = (client: WebSocket): IGame | void => {
+  if (client === client1) {
+    gameData.players.player1 = null;
+    return {
+      ...gameData,
+      type: "GAME_OVER",
+      message: "Player1 disconnected from game",
+    };
+  } else if (client === client2) {
+    gameData.players.player2 = null;
+    return {
+      ...gameData,
+      type: "GAME_OVER",
+      message: "Player1 disconnected from game",
+    };
   }
-};
-
-/**
- * Creates a new PlayerClient object
- * @param ws
- * @param name
- * @param symbol
- * @returns
- */
-const createPlayer = (
-  ws: WebSocket,
-  name: string,
-  symbol: ISymbol
-): IPlayerClient => {
-  return {
-    client: ws,
-    player: { name: name, symbol: symbol },
-  };
 };
 
 /**
