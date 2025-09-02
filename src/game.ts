@@ -11,10 +11,10 @@ const lines = [
   [0, 4, 8],
   [2, 4, 6],
 ];
-let board = new Array<ISymbol | null>(9).fill(null);
 let client1: WebSocket | null = null;
 let client2: WebSocket | null = null;
-let gameData: IGame = {
+const board = new Array<ISymbol | null>(9).fill(null);
+const gameData: IGame = {
   type: "PENDING",
   board: board,
   players: {
@@ -36,7 +36,6 @@ export const initializeGame = (): IGame => {
   return { ...gameData, type: "UPDATE", message: waiting };
 };
 
-
 /**
  * When a user arrives on the website, adds them to the list of players if there aren't two players yet
  * @param client WebSocket client of the user
@@ -47,13 +46,6 @@ export const addPlayer = (client: WebSocket, playerName: string): IGame => {
   let newPlayer: IPlayer;
 
   if (gameData.players.player1 && gameData.players.player2) {
-    client.send(
-      JSON.stringify({
-        ...gameData,
-        type: "ERROR",
-        message: "Can't create any new players.",
-      })
-    );
     return {
       ...gameData,
       type: "ERROR",
@@ -63,7 +55,7 @@ export const addPlayer = (client: WebSocket, playerName: string): IGame => {
 
   // Create player1 & player2 if they don't exist yet
   if (gameData.players.player1 === null) {
-    newPlayer = { name: playerName, symbol: "X" };
+    newPlayer = { name: playerName, symbol: "O" };
     gameData.players.player1 = newPlayer;
     client1 = client;
   } else {
@@ -73,16 +65,16 @@ export const addPlayer = (client: WebSocket, playerName: string): IGame => {
   }
 
   if (client1 && client2) {
-    gameData.currentTurn = gameData.players.player1!.name;
+    gameData.currentTurn = newPlayer.name;
     return { ...gameData, type: "GAME_START" };
   }
+
   return { ...gameData, type: "UPDATE", message: `${newPlayer.name} joined` };
 };
 
 /**
  * Get the user's move, records it and check if it creates a win.
- * @param client WebSocket client of the user
- * @param move Where the user clicked to play their turn
+ * @param moveId Where the user clicked to play their turn
  * @returns the game's information
  */
 export const playerMove = (moveId: number): IGame => {
@@ -158,7 +150,7 @@ export const removePlayer = (client: WebSocket): IGame | void => {
  * @returns true if the player played a winning move
  */
 const calculateWinner = () => {
-  for (let [a, b, c] of lines) {
+  for (const [a, b, c] of lines) {
     if (board[a] && board[a] === board[b] && board[a] === board[c]) {
       // return board[a];
       console.log("Winner: " + board[a]);

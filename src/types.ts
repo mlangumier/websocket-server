@@ -27,7 +27,7 @@ interface IGame {
   board: (ISymbol | null)[];
   winner?: string;
   currentTurn?: string;
-  message?: {};
+  message?: unknown;
 }
 
 export { IMessageType, ISymbol, IRequest, IPlayer, IGame };
