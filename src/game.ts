@@ -66,10 +66,10 @@ export const addPlayer = (client: WebSocket, playerName: string): IGame => {
 
   if (client1 && client2) {
     gameData.currentTurn = newPlayer.name;
-    return { ...gameData, type: "GAME_START" };
+    return { ...gameData, type: "GAME_START", message: newPlayer };
   }
 
-  return { ...gameData, type: "UPDATE", message: `${newPlayer.name} joined` };
+  return { ...gameData, type: "PLAYER_INFO", message: newPlayer };
 };
 
 /**
@@ -79,18 +79,28 @@ export const addPlayer = (client: WebSocket, playerName: string): IGame => {
  */
 export const playerMove = (moveId: number): IGame => {
   const { player1, player2 } = gameData.players;
+  let currentPlayer: IPlayer;
 
-  if (!player1 || !player2) {
+  if (!player1 || !player2 || !gameData.currentTurn) {
     throw new Error("Playing missing. Can't register move.");
   }
-  const currentPlayer: IPlayer =
-    gameData.currentTurn === player1.name ? player1 : player2;
+
+  // Get current player object from current player's name
+  if (gameData.currentTurn === player1.name) {
+    currentPlayer = player1;
+  } else {
+    currentPlayer = player2;
+  }
 
   // Add move to the board with the player's symbol if box isn't already checked
-  if (board[moveId] === null) {
-    board[moveId] = currentPlayer.symbol;
+  if (gameData.board[moveId] === null) {
+    gameData.board[moveId] = currentPlayer.symbol;
   } else {
-    throw new Error(`Square ${moveId} already taken`);
+    return {
+      ...gameData,
+      type: "ERROR",
+      message: `Square "${moveId}" already taken`,
+    };
   }
 
   // Check winning combinaison or draw (array length)
@@ -106,7 +116,7 @@ export const playerMove = (moveId: number): IGame => {
   }
 
   // Check if board full & declare draw
-  if (isBoardFull()) {
+  if (isBoardFull(gameData.board)) {
     return {
       ...gameData,
       type: "GAME_OVER",
@@ -114,11 +124,14 @@ export const playerMove = (moveId: number): IGame => {
     };
   }
 
+  // Defines who plays next turn
+  const expectedTurn: string =
+    currentPlayer.name === player1.name ? player2.name : player1.name;
+
+  gameData.currentTurn = expectedTurn;
   return {
     ...gameData,
     type: "UPDATE",
-    currentTurn:
-      currentPlayer.name === player1.name ? player2.name : player1.name,
     message: { move: moveId },
   };
 };
@@ -152,8 +165,6 @@ export const removePlayer = (client: WebSocket): IGame | void => {
 const calculateWinner = () => {
   for (const [a, b, c] of lines) {
     if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-      // return board[a];
-      console.log("Winner: " + board[a]);
       return true;
     }
   }
@@ -164,9 +175,6 @@ const calculateWinner = () => {
  * Checks if the board is full (no more moves possible)
  * @returns true if the board is full
  */
-const isBoardFull = () => {
-  return board.every(cell => cell !== null);
+const isBoardFull = (gameBoard: (ISymbol | null)[]) => {
+  return gameBoard.every(cell => cell !== null);
 };
-
-//TODO: message type "GAME_START" -> 2 players ready, game can start
-//TODO: message type "UPDATE" ->
